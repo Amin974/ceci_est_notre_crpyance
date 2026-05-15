@@ -13,16 +13,19 @@ export type Database = {
         Row: {
           id: string;
           name: string;
+          sort_order: number;
           created_at: string;
         };
         Insert: {
           id?: string;
           name: string;
+          sort_order?: number;
           created_at?: string;
         };
         Update: {
           id?: string;
           name?: string;
+          sort_order?: number;
           created_at?: string;
         };
         Relationships: [];
@@ -35,6 +38,7 @@ export type Database = {
           youtube_url: string | null;
           arabic_text: string | null;
           french_translation: string | null;
+          sort_order: number;
           created_at: string;
           updated_at: string;
         };
@@ -45,6 +49,7 @@ export type Database = {
           youtube_url?: string | null;
           arabic_text?: string | null;
           french_translation?: string | null;
+          sort_order?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -55,6 +60,7 @@ export type Database = {
           youtube_url?: string | null;
           arabic_text?: string | null;
           french_translation?: string | null;
+          sort_order?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -83,6 +89,7 @@ export type Database = {
           youtube_url: string | null;
           arabic_text: string | null;
           french_translation: string | null;
+          sort_order: number;
           created_at: string;
           updated_at: string;
         }[];

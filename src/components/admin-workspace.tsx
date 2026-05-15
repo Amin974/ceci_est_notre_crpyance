@@ -7,6 +7,7 @@ import {
   FilePlus2,
   Folder,
   FolderPlus,
+  GripVertical,
   LogOut,
   Menu,
   Search,
@@ -44,6 +45,8 @@ export function AdminWorkspace() {
   const [fileForm, setFileForm] = useState<FileFormState>(emptyFileForm);
   const [isFilePanelOpen, setIsFilePanelOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
+  const [draggedFileId, setDraggedFileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fetchingYoutubeTitle, setFetchingYoutubeTitle] = useState(false);
@@ -59,6 +62,8 @@ export function AdminWorkspace() {
 
     return files.filter((file) => file.folder_id === selectedFolderId);
   }, [files, searchQuery, selectedFolderId]);
+
+  const canReorderFiles = selectedFolderId !== "all" && !searchQuery.trim();
 
   useEffect(() => {
     if (!isConfigured) {
@@ -102,6 +107,7 @@ export function AdminWorkspace() {
       const { data: folderRows, error: folderError } = await supabase
         .from("folders")
         .select("*")
+        .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true });
 
       if (folderError) {
@@ -151,7 +157,8 @@ export function AdminWorkspace() {
       let request = supabase
         .from("files")
         .select("*, folders(id, name)")
-        .order("updated_at", { ascending: false });
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
 
       if (selectedFolderId !== "all") {
         request = request.eq("folder_id", selectedFolderId);
@@ -205,7 +212,7 @@ export function AdminWorkspace() {
 
       const { data, error: folderError } = await supabase
         .from("folders")
-        .insert({ name })
+        .insert({ name, sort_order: folders.length })
         .select("*")
         .single();
 
@@ -296,7 +303,12 @@ export function AdminWorkspace() {
 
         setMessage("Fichier modifié.");
       } else {
-        const { error: insertError } = await supabase.from("files").insert(payload);
+        const folderFileCount = files.filter(
+          (file) => file.folder_id === fileForm.folder_id,
+        ).length;
+        const { error: insertError } = await supabase
+          .from("files")
+          .insert({ ...payload, sort_order: folderFileCount });
 
         if (insertError) {
           throw insertError;
@@ -444,6 +456,90 @@ export function AdminWorkspace() {
     }
   }
 
+  async function handleFolderDrop(targetFolderId: string) {
+    if (!draggedFolderId || draggedFolderId === targetFolderId) {
+      setDraggedFolderId(null);
+      return;
+    }
+
+    const reorderedFolders = reorderById(folders, draggedFolderId, targetFolderId);
+    setFolders(reorderedFolders);
+    setDraggedFolderId(null);
+    await persistFolderOrder(reorderedFolders);
+  }
+
+  async function handleFileDrop(targetFileId: string) {
+    if (!canReorderFiles || !draggedFileId || draggedFileId === targetFileId) {
+      setDraggedFileId(null);
+      return;
+    }
+
+    const folderFiles = visibleFiles.filter((file) => file.folder_id === selectedFolderId);
+    const reorderedFolderFiles = reorderById(folderFiles, draggedFileId, targetFileId);
+    const reorderedFileIds = new Set(reorderedFolderFiles.map((file) => file.id));
+
+    setFiles((current) => [
+      ...current.filter((file) => !reorderedFileIds.has(file.id)),
+      ...reorderedFolderFiles,
+    ]);
+    setDraggedFileId(null);
+    await persistFileOrder(reorderedFolderFiles);
+  }
+
+  async function persistFolderOrder(orderedFolders: FolderType[]) {
+    setSaving(true);
+    setError("");
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const results = await Promise.all(
+        orderedFolders.map((folder, index) =>
+          supabase
+            .from("folders")
+            .update({ sort_order: index })
+            .eq("id", folder.id),
+        ),
+      );
+      const failedUpdate = results.find((result) => result.error);
+
+      if (failedUpdate?.error) {
+        throw failedUpdate.error;
+      }
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError));
+      await loadInitialData();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function persistFileOrder(orderedFiles: TranslationFile[]) {
+    setSaving(true);
+    setError("");
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const results = await Promise.all(
+        orderedFiles.map((file, index) =>
+          supabase
+            .from("files")
+            .update({ sort_order: index })
+            .eq("id", file.id),
+        ),
+      );
+      const failedUpdate = results.find((result) => result.error);
+
+      if (failedUpdate?.error) {
+        throw failedUpdate.error;
+      }
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError));
+      await loadFiles();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleLogout() {
     const supabase = getSupabaseBrowserClient();
     await supabase.auth.signOut();
@@ -520,13 +616,26 @@ export function AdminWorkspace() {
             <button
               key={folder.id}
               type="button"
+              draggable
+              onDragStart={() => setDraggedFolderId(folder.id)}
+              onDragEnd={() => setDraggedFolderId(null)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => handleFolderDrop(folder.id)}
               onClick={() => {
                 setSelectedFolderId(folder.id);
                 setIsMobileMenuOpen(false);
               }}
-              className={folderButtonClass(selectedFolderId === folder.id)}
+              className={`${folderButtonClass(selectedFolderId === folder.id)} ${
+                draggedFolderId === folder.id ? "opacity-45" : ""
+              }`}
+              title="Glisser pour réordonner"
             >
-              <Folder size={17} aria-hidden="true" />
+              <GripVertical
+                size={16}
+                className="shrink-0 cursor-grab text-muted"
+                aria-hidden="true"
+              />
+              <Folder size={17} className="shrink-0" aria-hidden="true" />
               <span className="truncate">{folder.name}</span>
             </button>
           ))}
@@ -686,20 +795,41 @@ export function AdminWorkspace() {
 
           {!loading && folders.length ? (
             <div className="grid gap-4">
+              {canReorderFiles ? (
+                <p className="text-sm text-muted">
+                  Glissez les fichiers pour choisir leur ordre dans ce dossier.
+                </p>
+              ) : null}
               {visibleFiles.length ? (
                 visibleFiles.map((file) => (
                   <article
                     key={file.id}
-                    className="rounded-lg border border-line/10 bg-panel p-5 shadow-premium"
+                    draggable={canReorderFiles}
+                    onDragStart={() => canReorderFiles && setDraggedFileId(file.id)}
+                    onDragEnd={() => setDraggedFileId(null)}
+                    onDragOver={(event) => canReorderFiles && event.preventDefault()}
+                    onDrop={() => handleFileDrop(file.id)}
+                    className={`rounded-lg border border-line/10 bg-panel p-5 shadow-premium transition ${
+                      draggedFileId === file.id ? "opacity-45" : ""
+                    } ${canReorderFiles ? "cursor-grab" : ""}`}
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div className="min-w-0">
-                        <p className="text-xs uppercase tracking-[0.18em] text-gold">
-                          {file.folders?.name ?? file.folder_name ?? "Dossier"}
-                        </p>
-                        <h2 className="mt-2 break-words font-title text-xl text-cream">
-                          {highlightMatches(file.title, searchQuery)}
-                        </h2>
+                      <div className="flex min-w-0 gap-3">
+                        {canReorderFiles ? (
+                          <GripVertical
+                            size={18}
+                            className="mt-1 shrink-0 text-muted"
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        <div className="min-w-0">
+                          <p className="text-xs uppercase tracking-[0.18em] text-gold">
+                            {file.folders?.name ?? file.folder_name ?? "Dossier"}
+                          </p>
+                          <h2 className="mt-2 break-words font-title text-xl text-cream">
+                            {highlightMatches(file.title, searchQuery)}
+                          </h2>
+                        </div>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
                         {file.youtube_url ? (
@@ -911,6 +1041,30 @@ function EmptyState({ title, text }: { title: string; text: string }) {
       <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted">{text}</p>
     </div>
   );
+}
+
+function reorderById<T extends { id: string }>(
+  items: T[],
+  draggedId: string,
+  targetId: string,
+) {
+  const draggedIndex = items.findIndex((item) => item.id === draggedId);
+  const targetIndex = items.findIndex((item) => item.id === targetId);
+
+  if (draggedIndex === -1 || targetIndex === -1) {
+    return items;
+  }
+
+  const nextItems = [...items];
+  const draggedItem = nextItems.splice(draggedIndex, 1)[0];
+
+  if (!draggedItem) {
+    return items;
+  }
+
+  nextItems.splice(targetIndex, 0, draggedItem);
+
+  return nextItems;
 }
 
 function getErrorMessage(error: unknown) {
