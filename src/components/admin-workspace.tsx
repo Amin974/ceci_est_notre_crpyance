@@ -26,6 +26,7 @@ type FileFormState = {
   folder_id: string;
   title: string;
   youtube_url: string;
+  published_at: string;
   arabic_text: string;
   french_translation: string;
 };
@@ -34,6 +35,7 @@ const emptyFileForm: FileFormState = {
   folder_id: "",
   title: "",
   youtube_url: "",
+  published_at: "",
   arabic_text: "",
   french_translation: "",
 };
@@ -68,7 +70,7 @@ export function AdminWorkspace() {
     return files.filter((file) => file.folder_id === selectedFolderId);
   }, [files, searchQuery, selectedFolderId]);
 
-  const canReorderFiles = selectedFolderId !== "all" && !searchQuery.trim();
+  const canReorderFiles = false;
 
   useEffect(() => {
     if (!isConfigured) {
@@ -162,8 +164,8 @@ export function AdminWorkspace() {
       let request = supabase
         .from("files")
         .select("*, folders(id, name)")
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true });
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false });
 
       if (selectedFolderId !== "all") {
         request = request.eq("folder_id", selectedFolderId);
@@ -263,6 +265,7 @@ export function AdminWorkspace() {
       folder_id: file.folder_id,
       title: file.title,
       youtube_url: file.youtube_url ?? "",
+      published_at: file.published_at ?? "",
       arabic_text: file.arabic_text ?? "",
       french_translation: file.french_translation ?? "",
     });
@@ -302,6 +305,7 @@ export function AdminWorkspace() {
       folder_id: fileForm.folder_id,
       title,
       youtube_url: fileForm.youtube_url.trim() || null,
+      published_at: fileForm.published_at || null,
       arabic_text: fileForm.arabic_text.trim() || null,
       french_translation: fileForm.french_translation.trim() || null,
       updated_at: new Date().toISOString(),
@@ -1109,6 +1113,21 @@ export function AdminWorkspace() {
                     Récupération du titre YouTube...
                   </span>
                 ) : null}
+              </label>
+
+              <label className="block text-sm text-cream">
+                Date de publication
+                <input
+                  className="gold-focus mt-2 w-full rounded border border-line/10 bg-surface px-3 py-3 text-cream placeholder:text-muted"
+                  value={fileForm.published_at}
+                  onChange={(event) =>
+                    setFileForm((current) => ({
+                      ...current,
+                      published_at: event.target.value,
+                    }))
+                  }
+                  type="date"
+                />
               </label>
 
               <label className="block text-sm text-cream">

@@ -36,6 +36,7 @@ export type Database = {
           folder_id: string;
           title: string;
           youtube_url: string | null;
+          published_at: string | null;
           arabic_text: string | null;
           french_translation: string | null;
           sort_order: number;
@@ -47,6 +48,7 @@ export type Database = {
           folder_id: string;
           title: string;
           youtube_url?: string | null;
+          published_at?: string | null;
           arabic_text?: string | null;
           french_translation?: string | null;
           sort_order?: number;
@@ -58,6 +60,7 @@ export type Database = {
           folder_id?: string;
           title?: string;
           youtube_url?: string | null;
+          published_at?: string | null;
           arabic_text?: string | null;
           french_translation?: string | null;
           sort_order?: number;
@@ -87,6 +90,7 @@ export type Database = {
           folder_name: string;
           title: string;
           youtube_url: string | null;
+          published_at: string | null;
           arabic_text: string | null;
           french_translation: string | null;
           sort_order: number;

@@ -1,46 +1,6 @@
-alter table public.folders
-add column if not exists sort_order integer default 0 not null;
-
-alter table public.files
-add column if not exists sort_order integer default 0 not null;
-
 alter table public.files
 add column if not exists published_at date;
 
-with ordered_folders as (
-  select id, row_number() over (order by created_at, id) - 1 as position
-  from public.folders
-)
-update public.folders
-set sort_order = ordered_folders.position
-from ordered_folders
-where folders.id = ordered_folders.id
-and folders.sort_order = 0
-and not exists (
-  select 1
-  from public.folders existing_folders
-  where existing_folders.sort_order <> 0
-);
-
-with ordered_files as (
-  select
-    id,
-    row_number() over (partition by folder_id order by created_at, id) - 1 as position
-  from public.files
-)
-update public.files
-set sort_order = ordered_files.position
-from ordered_files
-where files.id = ordered_files.id
-and files.sort_order = 0
-and not exists (
-  select 1
-  from public.files existing_files
-  where existing_files.sort_order <> 0
-);
-
-create index if not exists folders_sort_order_idx on public.folders(sort_order asc);
-create index if not exists files_folder_sort_order_idx on public.files(folder_id, sort_order asc);
 create index if not exists files_folder_published_at_idx
 on public.files(folder_id, published_at desc nulls last);
 

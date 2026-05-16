@@ -11,6 +11,7 @@ create table if not exists public.files (
   folder_id uuid not null references public.folders(id) on delete cascade,
   title text not null,
   youtube_url text,
+  published_at date,
   arabic_text text,
   french_translation text,
   created_at timestamp with time zone default now() not null,
@@ -18,6 +19,7 @@ create table if not exists public.files (
 );
 
 create index if not exists files_folder_id_idx on public.files(folder_id);
+create index if not exists files_folder_published_at_idx on public.files(folder_id, published_at desc nulls last);
 create index if not exists files_updated_at_idx on public.files(updated_at desc);
 
 create or replace function public.set_updated_at()
@@ -43,6 +45,7 @@ returns table (
   folder_name text,
   title text,
   youtube_url text,
+  published_at date,
   arabic_text text,
   french_translation text,
   created_at timestamp with time zone,
@@ -57,6 +60,7 @@ as $$
     folders.name as folder_name,
     files.title,
     files.youtube_url,
+    files.published_at,
     files.arabic_text,
     files.french_translation,
     files.created_at,
@@ -70,7 +74,7 @@ as $$
       or coalesce(files.arabic_text, '') ilike '%' || search_text || '%'
       or coalesce(files.french_translation, '') ilike '%' || search_text || '%'
     )
-  order by files.updated_at desc;
+  order by files.published_at desc nulls last, files.created_at desc;
 $$;
 
 alter table public.folders enable row level security;
