@@ -1177,6 +1177,22 @@ function getErrorMessage(error: unknown) {
       code?: unknown;
     };
 
+    const textParts = [
+      maybeError.message,
+      maybeError.details,
+      maybeError.hint,
+      maybeError.code,
+    ]
+      .filter((part): part is string => typeof part === "string")
+      .join(" ");
+
+    if (
+      maybeError.code === "23505" &&
+      /files_youtube_url_unique_idx|youtube_url/i.test(textParts)
+    ) {
+      return "Cette video YouTube existe deja dans la bibliotheque.";
+    }
+
     const parts = [maybeError.message, maybeError.details, maybeError.hint]
       .filter((part): part is string => typeof part === "string" && part.length > 0);
 
