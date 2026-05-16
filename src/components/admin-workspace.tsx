@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   FilePenLine,
   FilePlus2,
@@ -486,6 +488,42 @@ export function AdminWorkspace() {
     await persistFileOrder(reorderedFolderFiles);
   }
 
+  async function moveFolder(folderId: string, direction: -1 | 1) {
+    const currentIndex = folders.findIndex((folder) => folder.id === folderId);
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex === -1 || nextIndex < 0 || nextIndex >= folders.length) {
+      return;
+    }
+
+    const reorderedFolders = moveItem(folders, currentIndex, nextIndex);
+    setFolders(reorderedFolders);
+    await persistFolderOrder(reorderedFolders);
+  }
+
+  async function moveFile(fileId: string, direction: -1 | 1) {
+    if (!canReorderFiles) {
+      return;
+    }
+
+    const folderFiles = visibleFiles.filter((file) => file.folder_id === selectedFolderId);
+    const currentIndex = folderFiles.findIndex((file) => file.id === fileId);
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex === -1 || nextIndex < 0 || nextIndex >= folderFiles.length) {
+      return;
+    }
+
+    const reorderedFolderFiles = moveItem(folderFiles, currentIndex, nextIndex);
+    const reorderedFileIds = new Set(reorderedFolderFiles.map((file) => file.id));
+
+    setFiles((current) => [
+      ...current.filter((file) => !reorderedFileIds.has(file.id)),
+      ...reorderedFolderFiles,
+    ]);
+    await persistFileOrder(reorderedFolderFiles);
+  }
+
   async function persistFolderOrder(orderedFolders: FolderType[]) {
     setSaving(true);
     setError("");
@@ -612,32 +650,56 @@ export function AdminWorkspace() {
             <Search size={17} aria-hidden="true" />
             Tous les fichiers
           </button>
-          {folders.map((folder) => (
-            <button
+          {folders.map((folder, index) => (
+            <div
               key={folder.id}
-              type="button"
               draggable
               onDragStart={() => setDraggedFolderId(folder.id)}
               onDragEnd={() => setDraggedFolderId(null)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={() => handleFolderDrop(folder.id)}
-              onClick={() => {
-                setSelectedFolderId(folder.id);
-                setIsMobileMenuOpen(false);
-              }}
-              className={`${folderButtonClass(selectedFolderId === folder.id)} ${
+              className={`flex items-center gap-1 ${
                 draggedFolderId === folder.id ? "opacity-45" : ""
               }`}
-              title="Glisser pour réordonner"
+              title="Glisser ou utiliser les flèches pour réordonner"
             >
-              <GripVertical
-                size={16}
-                className="shrink-0 cursor-grab text-muted"
-                aria-hidden="true"
-              />
-              <Folder size={17} className="shrink-0" aria-hidden="true" />
-              <span className="truncate">{folder.name}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedFolderId(folder.id);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`${folderButtonClass(selectedFolderId === folder.id)} min-w-0 flex-1`}
+              >
+                <GripVertical
+                  size={16}
+                  className="hidden shrink-0 cursor-grab text-muted sm:block"
+                  aria-hidden="true"
+                />
+                <Folder size={17} className="shrink-0" aria-hidden="true" />
+                <span className="truncate">{folder.name}</span>
+              </button>
+              <div className="flex shrink-0 gap-1 sm:hidden">
+                <button
+                  type="button"
+                  onClick={() => moveFolder(folder.id, -1)}
+                  disabled={saving || index === 0}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded border border-line/10 text-muted disabled:opacity-35"
+                  aria-label={`Monter ${folder.name}`}
+                >
+                  <ChevronUp size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveFolder(folder.id, 1)}
+                  disabled={saving || index === folders.length - 1}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded border border-line/10 text-muted disabled:opacity-35"
+                  aria-label={`Descendre ${folder.name}`}
+                >
+                  <ChevronDown size={16} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
           ))}
         </nav>
 
@@ -801,7 +863,7 @@ export function AdminWorkspace() {
                 </p>
               ) : null}
               {visibleFiles.length ? (
-                visibleFiles.map((file) => (
+                visibleFiles.map((file, index) => (
                   <article
                     key={file.id}
                     draggable={canReorderFiles}
@@ -818,7 +880,7 @@ export function AdminWorkspace() {
                         {canReorderFiles ? (
                           <GripVertical
                             size={18}
-                            className="mt-1 shrink-0 text-muted"
+                            className="mt-1 hidden shrink-0 text-muted sm:block"
                             aria-hidden="true"
                           />
                         ) : null}
@@ -832,6 +894,28 @@ export function AdminWorkspace() {
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
+                        {canReorderFiles ? (
+                          <div className="flex gap-1 sm:hidden">
+                            <button
+                              type="button"
+                              onClick={() => moveFile(file.id, -1)}
+                              disabled={saving || index === 0}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded border border-line/10 text-muted disabled:opacity-35"
+                              aria-label={`Monter ${file.title}`}
+                            >
+                              <ChevronUp size={16} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveFile(file.id, 1)}
+                              disabled={saving || index === visibleFiles.length - 1}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded border border-line/10 text-muted disabled:opacity-35"
+                              aria-label={`Descendre ${file.title}`}
+                            >
+                              <ChevronDown size={16} aria-hidden="true" />
+                            </button>
+                          </div>
+                        ) : null}
                         {file.youtube_url ? (
                           <a
                             className="inline-flex items-center gap-2 rounded border border-gold/40 bg-gold/10 px-3 py-2 text-sm font-semibold text-cream transition hover:border-gold hover:bg-gold/20"
@@ -1063,6 +1147,19 @@ function reorderById<T extends { id: string }>(
   }
 
   nextItems.splice(targetIndex, 0, draggedItem);
+
+  return nextItems;
+}
+
+function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  const nextItems = [...items];
+  const item = nextItems.splice(fromIndex, 1)[0];
+
+  if (!item) {
+    return items;
+  }
+
+  nextItems.splice(toIndex, 0, item);
 
   return nextItems;
 }
