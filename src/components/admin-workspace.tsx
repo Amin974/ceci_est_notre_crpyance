@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase-browser";
-import { getSearchExcerpt, highlightMatches } from "@/lib/text";
+import { highlightMatches } from "@/lib/text";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Folder as FolderType, TranslationFile } from "@/types/database";
 
@@ -49,6 +49,9 @@ export function AdminWorkspace() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
   const [draggedFileId, setDraggedFileId] = useState<string | null>(null);
+  const [expandedTranslationIds, setExpandedTranslationIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fetchingYoutubeTitle, setFetchingYoutubeTitle] = useState(false);
@@ -266,6 +269,20 @@ export function AdminWorkspace() {
     setIsFilePanelOpen(true);
     setError("");
     setMessage("");
+  }
+
+  function toggleTranslation(fileId: string) {
+    setExpandedTranslationIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(fileId)) {
+        next.delete(fileId);
+      } else {
+        next.add(fileId);
+      }
+
+      return next;
+    });
   }
 
   async function handleSaveFile(event: FormEvent<HTMLFormElement>) {
@@ -863,95 +880,129 @@ export function AdminWorkspace() {
                 </p>
               ) : null}
               {visibleFiles.length ? (
-                visibleFiles.map((file, index) => (
-                  <article
-                    key={file.id}
-                    draggable={canReorderFiles}
-                    onDragStart={() => canReorderFiles && setDraggedFileId(file.id)}
-                    onDragEnd={() => setDraggedFileId(null)}
-                    onDragOver={(event) => canReorderFiles && event.preventDefault()}
-                    onDrop={() => handleFileDrop(file.id)}
-                    className={`rounded-lg border border-line/10 bg-panel p-5 shadow-premium transition ${
-                      draggedFileId === file.id ? "opacity-45" : ""
-                    } ${canReorderFiles ? "cursor-grab" : ""}`}
-                  >
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div className="flex min-w-0 gap-3">
-                        {canReorderFiles ? (
-                          <GripVertical
-                            size={18}
-                            className="mt-1 hidden shrink-0 text-muted sm:block"
-                            aria-hidden="true"
-                          />
-                        ) : null}
-                        <div className="min-w-0">
-                          <p className="text-xs uppercase tracking-[0.18em] text-gold">
-                            {file.folders?.name ?? file.folder_name ?? "Dossier"}
-                          </p>
-                          <h2 className="mt-2 break-words font-title text-xl text-cream">
-                            {highlightMatches(file.title, searchQuery)}
-                          </h2>
+                visibleFiles.map((file, index) => {
+                  const isTranslationExpanded = expandedTranslationIds.has(file.id);
+                  const translation = file.french_translation?.trim();
+                  const translationPanelId = `translation-${file.id}`;
+
+                  return (
+                    <article
+                      key={file.id}
+                      draggable={canReorderFiles}
+                      onDragStart={() => canReorderFiles && setDraggedFileId(file.id)}
+                      onDragEnd={() => setDraggedFileId(null)}
+                      onDragOver={(event) => canReorderFiles && event.preventDefault()}
+                      onDrop={() => handleFileDrop(file.id)}
+                      className={`rounded-lg border border-line/10 bg-panel p-5 shadow-premium transition ${
+                        draggedFileId === file.id ? "opacity-45" : ""
+                      } ${canReorderFiles ? "cursor-grab" : ""}`}
+                    >
+                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div className="flex min-w-0 gap-3">
+                          {canReorderFiles ? (
+                            <GripVertical
+                              size={18}
+                              className="mt-1 hidden shrink-0 text-muted sm:block"
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                          <div className="min-w-0">
+                            <p className="text-xs uppercase tracking-[0.18em] text-gold">
+                              {file.folders?.name ?? file.folder_name ?? "Dossier"}
+                            </p>
+                            <h2 className="mt-2 break-words font-title text-xl text-cream">
+                              {highlightMatches(file.title, searchQuery)}
+                            </h2>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          {canReorderFiles ? (
+                            <div className="flex gap-1 sm:hidden">
+                              <button
+                                type="button"
+                                onClick={() => moveFile(file.id, -1)}
+                                disabled={saving || index === 0}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded border border-line/10 text-muted disabled:opacity-35"
+                                aria-label={`Monter ${file.title}`}
+                              >
+                                <ChevronUp size={16} aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveFile(file.id, 1)}
+                                disabled={saving || index === visibleFiles.length - 1}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded border border-line/10 text-muted disabled:opacity-35"
+                                aria-label={`Descendre ${file.title}`}
+                              >
+                                <ChevronDown size={16} aria-hidden="true" />
+                              </button>
+                            </div>
+                          ) : null}
+                          {file.youtube_url ? (
+                            <a
+                              className="inline-flex items-center gap-2 rounded border border-gold/40 bg-gold/10 px-3 py-2 text-sm font-semibold text-cream transition hover:border-gold hover:bg-gold/20"
+                              href={file.youtube_url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <ExternalLink size={15} aria-hidden="true" />
+                              YouTube
+                            </a>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => openEditFilePanel(file)}
+                            className="inline-flex items-center gap-2 rounded border border-gold/50 px-3 py-2 text-sm text-cream transition hover:bg-gold hover:text-ink"
+                          >
+                            <FilePenLine size={15} aria-hidden="true" />
+                            Modifier
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFile(file)}
+                            disabled={saving}
+                            className="inline-flex items-center gap-2 rounded border border-danger/30 bg-danger/5 px-3 py-2 text-sm font-medium text-danger transition hover:border-danger/45 hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Trash2 size={15} aria-hidden="true" />
+                            Supprimer
+                          </button>
                         </div>
                       </div>
-                      <div className="flex shrink-0 flex-wrap gap-2">
-                        {canReorderFiles ? (
-                          <div className="flex gap-1 sm:hidden">
-                            <button
-                              type="button"
-                              onClick={() => moveFile(file.id, -1)}
-                              disabled={saving || index === 0}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded border border-line/10 text-muted disabled:opacity-35"
-                              aria-label={`Monter ${file.title}`}
-                            >
-                              <ChevronUp size={16} aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveFile(file.id, 1)}
-                              disabled={saving || index === visibleFiles.length - 1}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded border border-line/10 text-muted disabled:opacity-35"
-                              aria-label={`Descendre ${file.title}`}
-                            >
-                              <ChevronDown size={16} aria-hidden="true" />
-                            </button>
-                          </div>
-                        ) : null}
-                        {file.youtube_url ? (
-                          <a
-                            className="inline-flex items-center gap-2 rounded border border-gold/40 bg-gold/10 px-3 py-2 text-sm font-semibold text-cream transition hover:border-gold hover:bg-gold/20"
-                            href={file.youtube_url}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <ExternalLink size={15} aria-hidden="true" />
-                            YouTube
-                          </a>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => openEditFilePanel(file)}
-                          className="inline-flex items-center gap-2 rounded border border-gold/50 px-3 py-2 text-sm text-cream transition hover:bg-gold hover:text-ink"
-                        >
-                          <FilePenLine size={15} aria-hidden="true" />
-                          Modifier
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteFile(file)}
-                          disabled={saving}
-                          className="inline-flex items-center gap-2 rounded border border-danger/30 bg-danger/5 px-3 py-2 text-sm font-medium text-danger transition hover:border-danger/45 hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <Trash2 size={15} aria-hidden="true" />
-                          Supprimer
-                        </button>
-                      </div>
-                    </div>
 
-                    <p className="mt-4 break-words text-sm leading-7 text-muted" dir="auto">
-                      {highlightMatches(getSearchExcerpt(file, searchQuery), searchQuery)}
-                    </p>
-                  </article>
-                ))
+                      {translation ? (
+                        <div className="mt-4">
+                          <button
+                            type="button"
+                            onClick={() => toggleTranslation(file.id)}
+                            className="inline-flex items-center gap-2 rounded border border-gold/35 px-3 py-2 text-sm font-semibold text-gold transition hover:border-gold hover:bg-gold/10"
+                            aria-expanded={isTranslationExpanded}
+                            aria-controls={translationPanelId}
+                          >
+                            {isTranslationExpanded ? (
+                              <ChevronUp size={16} aria-hidden="true" />
+                            ) : (
+                              <ChevronDown size={16} aria-hidden="true" />
+                            )}
+                            {isTranslationExpanded
+                              ? "Masquer la traduction"
+                              : "Afficher la traduction"}
+                          </button>
+
+                          {isTranslationExpanded ? (
+                            <div
+                              id={translationPanelId}
+                              className="mt-4 border-t border-line/10 pt-4"
+                            >
+                              <p className="break-words whitespace-pre-wrap text-sm leading-7 text-cream">
+                                {highlightMatches(translation, searchQuery)}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })
               ) : (
                 <EmptyState
                   title={searchQuery.trim() ? "Aucun résultat" : "Aucun fichier"}
